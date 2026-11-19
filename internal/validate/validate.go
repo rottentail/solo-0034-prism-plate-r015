@@ -89,6 +89,51 @@ func brush(b scene.Brush) error {
 	}
 	return nil
 }
+func transform(m geom.Matrix) (geom.Matrix, error) {
+	for _, v := range m {
+		if !finite(v) {
+			return geom.Matrix{}, fmt.Errorf("invalid transform")
+		}
+	}
+	inv, ok := m.Inverse()
+	if !ok {
+		return geom.Matrix{}, fmt.Errorf("singular transform")
+	}
+	for _, v := range inv {
+		if !finite(v) {
+			return geom.Matrix{}, fmt.Errorf("ill-conditioned transform")
+		}
+	}
+	return inv, nil
+}
+func alphaMask(ms []scene.MaskShape, add func(string) error) ([]scene.CompiledMaskShape, int, error) {
+	out := make([]scene.CompiledMaskShape, 0, len(ms))
+	segments := 0
+	for _, m := range ms {
+		if err := add(m.ID); err != nil {
+			return nil, 0, err
+		}
+		if m.FillRule != "nonzero" && m.FillRule != "evenodd" {
+			return nil, 0, fmt.Errorf("invalid mask fill rule")
+		}
+		inv, err := transform(m.Transform)
+		if err != nil {
+			return nil, 0, fmt.Errorf("invalid mask transform: %w", err)
+		}
+		p, err := path(m.Path)
+		if err != nil {
+			return nil, 0, err
+		}
+		if err = brush(m.Brush); err != nil {
+			return nil, 0, fmt.Errorf("invalid mask brush: %w", err)
+		}
+		for _, r := range p {
+			segments += len(r)
+		}
+		out = append(out, scene.CompiledMaskShape{Shape: m, Path: p, Inverse: inv})
+	}
+	return out, segments, nil
+}
 func Compile(d scene.Document) (scene.Compiled, error) {
 	c := scene.Compiled{Document: d}
 	if d.Width < 1 || d.Height < 1 || d.Width > 512 || d.Height > 512 || !Color(d.Background) {
@@ -117,6 +162,9 @@ func Compile(d scene.Document) (scene.Compiled, error) {
 		if !Unit(l.Opacity) || (l.Blend != "normal" && l.Blend != "multiply" && l.Blend != "screen") {
 			return c, fmt.Errorf("invalid layer compositing")
 		}
+		if len(l.AlphaMask) > 16 {
+			return c, fmt.Errorf("requires at most 16 alpha mask shapes per layer")
+		}
 		if len(l.Shapes) < 1 || len(l.Shapes) > 32 {
 			return c, fmt.Errorf("requires 1..32 shapes per layer")
 		}
@@ -136,6 +184,14 @@ func Compile(d scene.Document) (scene.Compiled, error) {
 			}
 			cl.Mask = p
 			count(p)
+		}
+		if len(l.AlphaMask) > 0 {
+			am, segs, e := alphaMask(l.AlphaMask, add)
+			if e != nil {
+				return c, e
+			}
+			cl.Alpha = am
+			c.Segments += segs
 		}
 		for _, s := range l.Shapes {
 			if err := add(s.ID); err != nil {

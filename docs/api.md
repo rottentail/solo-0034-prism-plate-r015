@@ -22,3 +22,22 @@
 | POST /v1/bundles | 原样封包；201导入，重名409 |
 
 成品响应中的data为null，避免重复传输二进制；GET成品获得实际内容。If-None-Match精确匹配强ETag时返回304。成功校样可从持久化快照确认，当前版本没有校样列表/详情接口。GET版面返回完整历史，服务没有全局列表接口。
+
+## 图层渐变透明蒙版
+
+`document.layers[].alpha_mask` 为可选数组，最多16项，每项：
+
+```json
+{"id":"fade-wash","path":[...],"fill_rule":"nonzero",
+ "brush":{"kind":"linear","from":{"x":0,"y":0.5},"to":{"x":1,"y":0.5},
+          "stops":[{"at":0,"color":{"r":1,"g":1,"b":1,"a":1}},
+                   {"at":1,"color":{"r":1,"g":1,"b":1,"a":0}}]},
+ "transform":[140,0,0,64,10,28]}
+```
+
+- 自身 `id` 与图层、形状共用命名空间；重复或不合法拒绝。
+- `path`/`fill_rule`/`brush`/`transform` 的准入与普通形状一致；`brush` 只用 `a`，RGB 仅保留。
+- 蒙版形状在画布空间求值（各自 `transform`），目标形状在局部空间求值（逆 `transform`），因此两者可分别变换而仍对齐同一画布。
+- 多个蒙版形状按 source-over 并集，合并覆盖率再乘 `layer.opacity` 施加一次；重叠不重复衰减。
+- 结果为 PNG 的 `<mask mask-type=alpha>` 与 SVG 的 `<mask>`；PNG 才是逐像素权威。
+- 旧稿本无此字段，含义不变；这是稿本中可编辑、可随修订与封包移交的数据。

@@ -173,6 +173,30 @@
       "verification": "python3 scripts/walkthrough.py --workflow svg"
     },
     {
+      "id": "fade",
+      "name": "渐变透明蒙版",
+      "entry": "POST /v1/plates/{id}/render?format=png 或 svg",
+      "module_ids": [
+        "transport",
+        "service",
+        "validate",
+        "scene",
+        "geom",
+        "paint",
+        "raster",
+        "vector",
+        "bundle",
+        "repository"
+      ],
+      "steps": [
+        "从公开入口解析并获取固定来源",
+        "跨职责计算或判定并提交完整结果"
+      ],
+      "success": "蒙版并集后整层只衰减一次，并与目标各自变换定位到同一画布；PNG逐像素、SVG结构各自可核验",
+      "failure": "非法蒙版变换、重复id或坏渐变在写入前400",
+      "verification": "python3 scripts/walkthrough.py --workflow fade"
+    },
+    {
       "id": "exposure",
       "name": "有界异步成像",
       "entry": "POST /v1/plates/{id}/exposures",

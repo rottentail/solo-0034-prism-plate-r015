@@ -39,7 +39,13 @@ func Render(ctx context.Context, c scene.Compiled) ([]byte, error) {
 								src = paint.Over(src, paint.Sample(s.Shape.Brush, q), "normal")
 							}
 						}
-						dst = paint.Over(dst, src.Scale(l.Layer.Opacity), l.Layer.Blend)
+						// The soft mask is resolved in mask space and applied once, so
+						// overlapping mask shapes cannot attenuate the same layer twice.
+						alpha := l.Layer.Opacity
+						if len(l.Alpha) > 0 {
+							alpha *= paint.MaskCoverage(l.Alpha, p)
+						}
+						dst = paint.Over(dst, src.Scale(alpha), l.Layer.Blend)
 					}
 					sum.R += dst.R / 4
 					sum.G += dst.G / 4
